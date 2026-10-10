@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useHydrated } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,19 +6,23 @@ import { EmptyState } from "@/components/academy/empty-state";
 import { progressService } from "@/services/progressService";
 import { authService } from "@/services/authService";
 import { pageHead } from "@/lib/metadata";
+import { themeLabel } from "@/lib/puzzle-themes";
 export const Route = createFileRoute("/progress")({
   head: () => pageHead("Progress", "Puzzle accuracy, recent mistakes, and training rating."),
   component: ProgressPage,
 });
 function ProgressPage() {
   const user = useQuery({ queryKey: ["user"], queryFn: authService.getUser });
+  const loggedIn = Boolean(user.data);
+  // Progress lives in the browser, so render "loading" until hydrated to match the server.
+  const hydrated = useHydrated();
   const query = useQuery({
-    queryKey: ["progress", user.data?.id],
-    queryFn: progressService.get,
-    enabled: Boolean(user.data),
+    queryKey: ["progress", user.data?.id ?? "guest"],
+    queryFn: () => progressService.get(loggedIn),
+    enabled: !user.isPending,
     retry: false,
   });
-  const data = query.data;
+  const data = hydrated ? query.data : undefined;
   return (
     <div className="page">
       <div className="page-heading">
@@ -41,12 +45,26 @@ function ProgressPage() {
         </div>
         <div className="progress-metric">
           <h2>Suggested next step</h2>
-          <strong className="!text-xl">{data?.suggestedNextStep ?? "—"}</strong>
+          <strong className="!text-xl">
+            {data?.suggestedNextStep ?? "Solve your first puzzle"}
+          </strong>
           <Button variant="link" asChild className="px-0">
-            <Link to="/practice">
-              Practice board
-              <ArrowRight />
-            </Link>
+            {data?.weakestTheme ? (
+              <Link to="/puzzles" search={{ theme: data.weakestTheme }}>
+                Start
+                <ArrowRight />
+              </Link>
+            ) : data?.mistakes[0] ? (
+              <Link to="/puzzles" search={{ id: data.mistakes[0].puzzleId }}>
+                Retry it
+                <ArrowRight />
+              </Link>
+            ) : (
+              <Link to="/puzzles">
+                Puzzles
+                <ArrowRight />
+              </Link>
+            )}
           </Button>
         </div>
       </div>
@@ -54,9 +72,11 @@ function ProgressPage() {
         <div className="progress-columns">
           <section>
             <h2>Accuracy by theme</h2>
-            {data.accuracy.map((item) => (
+            {data.accuracy.slice(0, 12).map((item) => (
               <div className="data-row" key={item.theme}>
-                <span>{item.theme}</span>
+                <Link to="/puzzles" search={{ theme: item.theme }}>
+                  {themeLabel(item.theme)}
+                </Link>
                 <span>
                   {item.total ? Math.round((100 * item.correct) / item.total) : 0}% · {item.correct}
                   /{item.total}
@@ -69,8 +89,10 @@ function ProgressPage() {
             {data.mistakes.length ? (
               data.mistakes.map((item, index) => (
                 <div className="data-row" key={`${item.puzzleId}-${index}`}>
-                  <span>{item.theme}</span>
-                  <time>{item.date}</time>
+                  <Link to="/puzzles" search={{ id: item.puzzleId }}>
+                    {themeLabel(item.theme)} · retry
+                  </Link>
+                  <time dateTime={item.date}>{new Date(item.date).toLocaleDateString()}</time>
                 </div>
               ))
             ) : (
@@ -80,14 +102,12 @@ function ProgressPage() {
         </div>
       ) : (
         <EmptyState
-          loading={user.isLoading || Boolean(user.data && query.isLoading)}
+          loading={!hydrated || user.isPending || query.isPending}
           error={user.isError || query.isError}
           title={
             user.isError || query.isError
               ? "Progress couldn’t load"
-              : user.data
-                ? "No progress yet. Your results will appear here."
-                : "Log in to keep your results here."
+              : "No progress yet. Solve a puzzle and your results will appear here."
           }
           description=""
           retry={() => {
@@ -96,8 +116,11 @@ function ProgressPage() {
           }}
         />
       )}
-      {!user.data && !user.isLoading && (
+      {hydrated && !user.data && !user.isPending && (
         <div className="text-center">
+          <p className="panel-text mb-4">
+            As a guest, progress is saved in this browser only. An account keeps it everywhere.
+          </p>
           <Button asChild>
             <Link to="/signup">
               Sign up

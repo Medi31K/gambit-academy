@@ -5,6 +5,7 @@ import { lessonService } from "./lessonService";
 import { progressService } from "./progressService";
 describe("Frontend service contracts", () => {
   it("never provides fabricated puzzle positions", async () => {
+    // Without a database connection there are no puzzles, never made-up ones.
     expect(await puzzleService.next()).toBeNull();
     expect(await puzzleService.list()).toEqual([]);
   });

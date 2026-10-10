@@ -1206,3 +1206,104 @@ a:focus-visible > .nudge {
     display: none;
   }
 }
+
+/* Accounts, attribution and admin */
+.header-username {
+  font-size: 13px;
+  font-weight: 600;
+}
+.mobile-nav button {
+  text-align: left;
+  font: inherit;
+}
+.footer-credit {
+  margin: 0;
+  font-size: 11px;
+}
+.footer-credit a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .header-username {
+    display: none;
+  }
+  .site-footer {
+    flex-wrap: wrap;
+  }
+}
+.puzzle-filter {
+  margin: -12px 0 18px;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+.puzzle-filter a,
+.game-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rating-change {
+  margin: 14px 0 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+.rating-change span {
+  display: block;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.game-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.game-link svg {
+  width: 14px;
+}
+.admin-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+.admin-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.admin-toolbar .field {
+  max-width: 340px;
+}
+.admin-row {
+  align-items: center;
+  gap: 12px;
+}
+.admin-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.admin-form {
+  max-width: 640px;
+}
+.admin-form h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+}
+.admin-check {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .admin-tabs {
+    overflow-x: auto;
+  }
+  .admin-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,7 +1,7 @@
-import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowUpRight, Menu, Moon, Sun, X } from "lucide-react";
+import { ArrowUpRight, LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { authService } from "@/services/authService";
 import { BrandMark } from "./brand";
@@ -9,6 +9,19 @@ export function SiteShell({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(false);
   const [menu, setMenu] = useState(false);
   const { data: user } = useQuery({ queryKey: ["user"], queryFn: authService.getUser });
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  // Logging in or out in another tab, or a token refresh, updates the header.
+  useEffect(
+    () => authService.onChange(() => void queryClient.invalidateQueries({ queryKey: ["user"] })),
+    [queryClient],
+  );
+  const logout = async () => {
+    setMenu(false);
+    await authService.logout();
+    await queryClient.invalidateQueries();
+    await navigate({ to: "/" });
+  };
   useEffect(() => {
     const preference = localStorage.getItem("gambit-theme");
     const value = preference
@@ -40,7 +53,11 @@ export function SiteShell({ children }: { children: ReactNode }) {
       <Link to="/progress" onClick={() => setMenu(false)}>
         Progress
       </Link>
-      {user?.role === "admin" && <Link to="/admin">Admin</Link>}
+      {user?.role === "admin" && (
+        <Link to="/admin" onClick={() => setMenu(false)}>
+          Admin
+        </Link>
+      )}
     </>
   );
   return (
@@ -70,7 +87,18 @@ export function SiteShell({ children }: { children: ReactNode }) {
               {dark ? <Sun /> : <Moon />}
             </Button>
             {user ? (
-              <span>{user.username}</span>
+              <>
+                <span className="header-username">{user.username}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => void logout()}
+                  title="Log out"
+                  aria-label="Log out"
+                >
+                  <LogOut />
+                </Button>
+              </>
             ) : (
               <>
                 <Link className="login-link" to="/login">
@@ -99,12 +127,20 @@ export function SiteShell({ children }: { children: ReactNode }) {
         {menu && (
           <nav className="mobile-nav" aria-label="Mobile navigation">
             {nav}
-            <Link to="/login" onClick={() => setMenu(false)}>
-              Log in
-            </Link>
-            <Link to="/signup" onClick={() => setMenu(false)}>
-              Sign up
-            </Link>
+            {user ? (
+              <button type="button" onClick={() => void logout()}>
+                Log out
+              </button>
+            ) : (
+              <>
+                <Link to="/login" onClick={() => setMenu(false)}>
+                  Log in
+                </Link>
+                <Link to="/signup" onClick={() => setMenu(false)}>
+                  Sign up
+                </Link>
+              </>
+            )}
           </nav>
         )}
       </header>
@@ -114,6 +150,13 @@ export function SiteShell({ children }: { children: ReactNode }) {
           <BrandMark />
           <span>gambit academy</span>
         </Link>
+        <p className="footer-credit">
+          Puzzles from the{" "}
+          <a href="https://database.lichess.org/#puzzles" target="_blank" rel="noreferrer">
+            Lichess puzzle database
+          </a>{" "}
+          (CC0).
+        </p>
       </footer>
     </>
   );

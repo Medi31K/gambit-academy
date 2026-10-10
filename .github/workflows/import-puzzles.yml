@@ -1,0 +1,47 @@
+name: Import Lichess puzzles
+
+on:
+  workflow_dispatch:
+    inputs:
+      per_bucket:
+        description: Max puzzles kept per 100-point rating bucket
+        required: false
+        default: "2200"
+        type: string
+      dry_run:
+        description: Only print stats, do not upload to Supabase
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install zstd
+        run: command -v zstd || (sudo apt-get update && sudo apt-get install -y zstd)
+
+      - name: Download, filter and import puzzles
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PER_BUCKET: ${{ inputs.per_bucket }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: |
+          set -o pipefail
+          curl -sSfL https://database.lichess.org/lichess_db_puzzle.csv.zst \
+            | zstd -dc \
+            | node scripts/import-puzzles.mjs

@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useHydrated } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Chess, type PieceSymbol } from "chess.js";
 import {
   CheckCircle2,
+  ExternalLink,
   Eye,
   Lightbulb,
   Puzzle as PuzzleIcon,
@@ -15,35 +16,65 @@ import { EmptyState } from "@/components/academy/empty-state";
 import { InteractiveBoard } from "@/components/chess/interactive-board";
 import { puzzleService } from "@/services/puzzleService";
 import { progressService } from "@/services/progressService";
+import { authService } from "@/services/authService";
 import { pageHead } from "@/lib/metadata";
 import { tryMove, uciMove } from "@/lib/chess-logic";
-import type { Puzzle } from "@/types/academy";
+import { isAcceptedMove } from "@/lib/puzzle-data";
+import { themeLabel } from "@/lib/puzzle-themes";
+import type { AttemptResult, Puzzle } from "@/types/academy";
+interface PuzzleSearch {
+  // Replay one puzzle, e.g. a recent mistake.
+  id?: string | undefined;
+  // Practise one Lichess theme tag, e.g. "fork".
+  theme?: string | undefined;
+}
 export const Route = createFileRoute("/puzzles")({
+  validateSearch: (search: Record<string, unknown>): PuzzleSearch => ({
+    id: typeof search["id"] === "string" && search["id"] ? search["id"] : undefined,
+    theme: typeof search["theme"] === "string" && search["theme"] ? search["theme"] : undefined,
+  }),
   head: () => pageHead("Puzzles", "Free chess puzzles with hints and solutions."),
   component: Puzzles,
 });
 function Puzzles() {
-  const [exclude, setExclude] = useState<string>();
+  const { id, theme } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const user = useQuery({ queryKey: ["user"], queryFn: authService.getUser });
+  const loggedIn = Boolean(user.data);
+  // Puzzles load in the browser only; match the server's empty board until hydrated.
+  const hydrated = useHydrated();
+  // Puzzles seen in this visit, so "Next puzzle" never repeats one.
+  const [seen, setSeen] = useState<string[]>([]);
   const query = useQuery({
-    queryKey: ["puzzle", exclude],
-    queryFn: () => puzzleService.next(exclude),
+    queryKey: ["puzzle", id ?? null, theme ?? null, loggedIn, seen.length],
+    queryFn: () =>
+      id ? puzzleService.get(id) : puzzleService.next({ exclude: seen, theme, loggedIn }),
+    enabled: !user.isPending,
     retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
+  const next = () => {
+    const current = query.data?.id;
+    if (id) void navigate({ search: theme ? { theme } : {} });
+    if (current) setSeen((list) => (list.includes(current) ? list : [...list, current]));
+  };
   return (
     <div className="page">
       <div className="page-heading">
         <h1>Puzzles</h1>
         <p>Find the best moves in real game positions, with hints when you need them.</p>
       </div>
-      {query.data ? (
-        <PuzzleWorkspace
-          key={query.data.id}
-          puzzle={query.data}
-          next={() => {
-            if (exclude === query.data?.id) void query.refetch();
-            else setExclude(query.data?.id);
-          }}
-        />
+      {theme && (
+        <p className="puzzle-filter">
+          Practising: <strong>{themeLabel(theme)}</strong> ·{" "}
+          <Link to="/puzzles" search={{}}>
+            All themes
+          </Link>
+        </p>
+      )}
+      {hydrated && query.data ? (
+        <PuzzleWorkspace key={query.data.id} puzzle={query.data} loggedIn={loggedIn} next={next} />
       ) : (
         <div className="workspace">
           <div className="board-column">
@@ -83,10 +114,16 @@ function Puzzles() {
               </Button>
             </div>
             <EmptyState
-              loading={query.isLoading}
+              loading={!hydrated || user.isPending || query.isPending}
               error={query.isError}
               title={
-                query.isError ? "Puzzles couldn’t load" : "No puzzles yet. They're on the way."
+                query.isError
+                  ? "Puzzles couldn’t load"
+                  : id
+                    ? "That puzzle isn't available."
+                    : theme
+                      ? "No more puzzles with this theme right now."
+                      : "No puzzles yet. They're on the way."
               }
               description=""
               retry={() => {
@@ -99,37 +136,69 @@ function Puzzles() {
     </div>
   );
 }
-function PuzzleWorkspace({ puzzle, next }: { puzzle: Puzzle; next: () => void }) {
+function PuzzleWorkspace({
+  puzzle,
+  loggedIn,
+  next,
+}: {
+  puzzle: Puzzle;
+  loggedIn: boolean;
+  next: () => void;
+}) {
   const [game] = useState(() => new Chess(puzzle.fen));
   const [position, setPosition] = useState(game.fen());
+  // The solver plays the side that is NOT to move in the stored position,
+  // because the opponent's last move is played first.
+  const [solverColor] = useState<"white" | "black">(() =>
+    game.turn() === "w" ? "black" : "white",
+  );
+  const [ready, setReady] = useState(false);
   const [index, setIndex] = useState(0);
   const [hint, setHint] = useState(0);
   const [feedback, setFeedback] = useState<"correct" | "wrong" | "solution" | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [attemptedWrong, setAttemptedWrong] = useState(false);
+  const [busy, setBusy] = useState(true);
+  const [result, setResult] = useState<AttemptResult | null>(null);
   const [saveError, setSaveError] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
+  // Refs, because these are read inside timers that outlive a render.
+  const failed = useRef(false);
+  const helped = useRef(false);
+  const recorded = useRef(false);
+  const done = index >= puzzle.solution.length;
+  useEffect(() => {
+    timer.current = setTimeout(() => {
+      uciMove(game, puzzle.setupMove);
+      setPosition(game.fen());
+      setReady(true);
+      setBusy(false);
+    }, 600);
+    return () => {
       if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
+    };
+  }, [game, puzzle.setupMove]);
   const record = (correct: boolean) => {
-    void progressService
-      .recordAttempt(puzzle.id, correct)
+    if (recorded.current) return;
+    recorded.current = true;
+    progressService
+      .recordAttempt(puzzle, correct, helped.current, loggedIn)
+      .then(setResult)
       .catch(() => setSaveError("Progress could not be saved."));
   };
   function play(from: string, to: string, promotion: PieceSymbol = "q") {
-    if (busy || index >= puzzle.solution.length) return false;
-    const expected = puzzle.solution[index];
-    const result = tryMove(game, from, to, promotion);
-    if (!result) return false;
-    const uci = from + to + (result.promotion ?? "");
-    if (uci !== expected) {
+    if (busy || done) return false;
+    const expected = puzzle.solution[index] ?? "";
+    const isLast = index === puzzle.solution.length - 1;
+    const move = tryMove(game, from, to, promotion);
+    if (!move) return false;
+    const uci = from + to + (move.promotion ?? "");
+    if (!isAcceptedMove(game, expected, uci, isLast)) {
       game.undo();
       setFeedback("wrong");
-      setAttemptedWrong(true);
+      // The first wrong move means the puzzle counts as not solved.
+      if (!failed.current) {
+        failed.current = true;
+        record(false);
+      }
       return false;
     }
     setPosition(game.fen());
@@ -138,25 +207,28 @@ function PuzzleWorkspace({ puzzle, next }: { puzzle: Puzzle; next: () => void })
     const nextIndex = index + 1;
     if (nextIndex >= puzzle.solution.length) {
       setIndex(nextIndex);
-      record(!attemptedWrong);
+      record(true);
       return true;
     }
     setBusy(true);
     setIndex(nextIndex);
     timer.current = setTimeout(() => {
-      const reply = puzzle.solution[nextIndex];
-      if (reply) {
-        uciMove(game, reply);
-        setPosition(game.fen());
-      }
+      uciMove(game, puzzle.solution[nextIndex] ?? "");
+      setPosition(game.fen());
       setIndex(nextIndex + 1);
       setBusy(false);
-      if (nextIndex + 1 >= puzzle.solution.length) record(!attemptedWrong);
+      if (nextIndex + 1 >= puzzle.solution.length) record(true);
     }, 550);
     return true;
   }
+  function showHint() {
+    helped.current = true;
+    setHint(Math.min(hint + 1, 2));
+  }
   function solution() {
     if (timer.current) clearTimeout(timer.current);
+    helped.current = true;
+    record(false);
     setBusy(true);
     setHint(0);
     setFeedback("solution");
@@ -175,24 +247,26 @@ function PuzzleWorkspace({ puzzle, next }: { puzzle: Puzzle; next: () => void })
       timer.current = setTimeout(step, 750);
     };
     step();
-    record(false);
   }
+  const toMove = game.turn() === "w" ? "White" : "Black";
   return (
     <div className="workspace">
       <div className="board-column">
         <InteractiveBoard
           game={game}
           position={position}
-          orientation={new Chess(puzzle.fen).turn() === "w" ? "white" : "black"}
+          orientation={solverColor}
           onMove={play}
-          disabled={busy || index >= puzzle.solution.length}
+          disabled={busy || done}
           hintSquare={hint > 1 ? puzzle.solution[index]?.slice(0, 2) : undefined}
         />
         <div className="board-bar">
           <span className="turn-indicator" aria-live="polite">
-            {index >= puzzle.solution.length
-              ? "Puzzle complete"
-              : `${game.turn() === "w" ? "White" : "Black"} to move`}
+            {!ready
+              ? "Watch the opponent's move"
+              : done
+                ? "Puzzle complete"
+                : `${toMove} to move · Find the best move`}
           </span>
         </div>
       </div>
@@ -200,12 +274,12 @@ function PuzzleWorkspace({ puzzle, next }: { puzzle: Puzzle; next: () => void })
         <h2 className="panel-title">Puzzle details</h2>
         <div className="puzzle-metadata">
           <div>
-            <span>To move</span>
-            <strong>{game.turn() === "w" ? "White" : "Black"}</strong>
+            <span>You play</span>
+            <strong>{solverColor === "white" ? "White" : "Black"}</strong>
           </div>
           <div>
             <span>Theme</span>
-            <strong>{puzzle.theme}</strong>
+            <strong>{done || feedback === "solution" || hint > 0 ? puzzle.theme : "Hidden"}</strong>
           </div>
           <div>
             <span>Difficulty</span>
@@ -213,28 +287,27 @@ function PuzzleWorkspace({ puzzle, next }: { puzzle: Puzzle; next: () => void })
           </div>
         </div>
         <div className="puzzle-buttons">
-          <Button
-            variant="outline"
-            disabled={busy || index >= puzzle.solution.length}
-            onClick={() => setHint(Math.min(hint + 1, 2))}
-          >
+          <Button variant="outline" disabled={busy || done} onClick={showHint}>
             <Lightbulb />
             Hint
           </Button>
-          <Button
-            variant="outline"
-            disabled={busy || index >= puzzle.solution.length}
-            onClick={solution}
-          >
+          <Button variant="outline" disabled={busy || done} onClick={solution}>
             <Eye />
             Show solution
           </Button>
-          <Button disabled={busy} onClick={next}>
+          <Button
+            disabled={busy && ready}
+            onClick={() => {
+              // Skipping after a wrong move still counts that attempt.
+              if (failed.current) record(false);
+              next();
+            }}
+          >
             <SkipForward />
             Next puzzle
           </Button>
         </div>
-        {hint > 0 && (
+        {hint > 0 && !done && (
           <div className="feedback">
             <Lightbulb />
             <span>
@@ -258,17 +331,35 @@ function PuzzleWorkspace({ puzzle, next }: { puzzle: Puzzle; next: () => void })
                   ? "Not quite"
                   : feedback === "solution"
                     ? "Solution"
-                    : "Correct"}
+                    : done
+                      ? failed.current
+                        ? "Completed"
+                        : "Solved"
+                      : "Correct"}
               </strong>
               <p>
                 {feedback === "wrong"
-                  ? "Legal move, but not the solution."
-                  : index >= puzzle.solution.length || feedback === "solution"
+                  ? "That's legal, but it's not the move. Try again, or ask for a hint."
+                  : done || feedback === "solution"
                     ? puzzle.explanation
-                    : "Continue the solution."}
+                    : "Keep going."}
               </p>
             </div>
           </div>
+        )}
+        {result && (
+          <p className="rating-change" aria-live="polite">
+            {result.rated
+              ? `Training rating ${result.rating} (${result.delta >= 0 ? "+" : ""}${result.delta})`
+              : "Already tried before, so this one isn't rated."}
+            <span>Not an official Elo.{!loggedIn && " Saved in this browser only."}</span>
+          </p>
+        )}
+        {done && puzzle.gameUrl && (
+          <a className="game-link" href={puzzle.gameUrl} target="_blank" rel="noreferrer">
+            See the game on Lichess
+            <ExternalLink />
+          </a>
         )}
         {saveError && (
           <div className="feedback" role="alert">
