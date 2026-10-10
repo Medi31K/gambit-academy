@@ -344,6 +344,19 @@ function rank(theme: string) {
   return 1;
 }
 
+// Themes a player can choose to practise, grouped for the picker.
+export const THEME_GROUPS: { label: string; themes: { id: string; label: string }[] }[] = [
+  { label: "Tactics", test: (t: string) => rank(t) === 1 },
+  { label: "Checkmate in N", test: (t: string) => rank(t) === 2 },
+  { label: "Mating patterns", test: (t: string) => rank(t) === 0 },
+  { label: "Endgames", test: (t: string) => rank(t) === 3 },
+].map((group) => ({
+  label: group.label,
+  themes: Object.keys(THEMES)
+    .filter(group.test)
+    .map((id) => ({ id, label: THEMES[id]?.label ?? id })),
+}));
+
 export function themeLabel(theme: string): string {
   if (THEMES[theme]) return THEMES[theme].label;
   if (theme === "mixed") return "Mixed";

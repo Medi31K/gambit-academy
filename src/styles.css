@@ -1237,6 +1237,12 @@ a:focus-visible > .nudge {
   margin: -12px 0 18px;
   font-size: 14px;
   color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.puzzle-filter .field {
+  max-width: 300px;
 }
 .puzzle-filter a,
 .game-link {

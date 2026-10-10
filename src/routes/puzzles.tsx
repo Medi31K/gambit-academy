@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useHydrated } from "@tanstack/react-router";
+import { createFileRoute, useHydrated } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Chess, type PieceSymbol } from "chess.js";
@@ -20,7 +20,7 @@ import { authService } from "@/services/authService";
 import { pageHead } from "@/lib/metadata";
 import { tryMove, uciMove } from "@/lib/chess-logic";
 import { isAcceptedMove } from "@/lib/puzzle-data";
-import { themeLabel } from "@/lib/puzzle-themes";
+import { THEME_GROUPS, themeLabel } from "@/lib/puzzle-themes";
 import type { AttemptResult, Puzzle } from "@/types/academy";
 interface PuzzleSearch {
   // Replay one puzzle, e.g. a recent mistake.
@@ -65,14 +65,31 @@ function Puzzles() {
         <h1>Puzzles</h1>
         <p>Find the best moves in real game positions, with hints when you need them.</p>
       </div>
-      {theme && (
-        <p className="puzzle-filter">
-          Practising: <strong>{themeLabel(theme)}</strong> ·{" "}
-          <Link to="/puzzles" search={{}}>
-            All themes
-          </Link>
-        </p>
-      )}
+      <div className="puzzle-filter">
+        <label htmlFor="puzzle-theme">Practise</label>
+        <select
+          id="puzzle-theme"
+          className="field"
+          value={theme ?? ""}
+          onChange={(event) =>
+            void navigate({ search: event.target.value ? { theme: event.target.value } : {} })
+          }
+        >
+          <option value="">All themes, matched to your rating</option>
+          {theme && !THEME_GROUPS.some((g) => g.themes.some((t) => t.id === theme)) && (
+            <option value={theme}>{themeLabel(theme)}</option>
+          )}
+          {THEME_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.themes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
       {hydrated && query.data ? (
         <PuzzleWorkspace key={query.data.id} puzzle={query.data} loggedIn={loggedIn} next={next} />
       ) : (
