@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LearnRouteImport } from './routes/learn'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PlayRouteImport } from './routes/play'
 import { Route as PracticeRouteImport } from './routes/practice'
 import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as PuzzlesRouteImport } from './routes/puzzles'
@@ -37,6 +38,11 @@ const LearnRoute = LearnRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlayRoute = PlayRouteImport.update({
+  id: '/play',
+  path: '/play',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PracticeRoute = PracticeRouteImport.update({
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/learn': typeof LearnRoute
   '/login': typeof LoginRoute
+  '/play': typeof PlayRoute
   '/practice': typeof PracticeRoute
   '/progress': typeof ProgressRoute
   '/puzzles': typeof PuzzlesRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/learn': typeof LearnRoute
   '/login': typeof LoginRoute
+  '/play': typeof PlayRoute
   '/practice': typeof PracticeRoute
   '/progress': typeof ProgressRoute
   '/puzzles': typeof PuzzlesRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/learn': typeof LearnRoute
   '/login': typeof LoginRoute
+  '/play': typeof PlayRoute
   '/practice': typeof PracticeRoute
   '/progress': typeof ProgressRoute
   '/puzzles': typeof PuzzlesRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/learn'
     | '/login'
+    | '/play'
     | '/practice'
     | '/progress'
     | '/puzzles'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/learn'
     | '/login'
+    | '/play'
     | '/practice'
     | '/progress'
     | '/puzzles'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/learn'
     | '/login'
+    | '/play'
     | '/practice'
     | '/progress'
     | '/puzzles'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   LearnRoute: typeof LearnRoute
   LoginRoute: typeof LoginRoute
+  PlayRoute: typeof PlayRoute
   PracticeRoute: typeof PracticeRoute
   ProgressRoute: typeof ProgressRoute
   PuzzlesRoute: typeof PuzzlesRoute
@@ -175,6 +188,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/play': {
+      id: '/play'
+      path: '/play'
+      fullPath: '/play'
+      preLoaderRoute: typeof PlayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/practice': {
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   LearnRoute: LearnRoute,
   LoginRoute: LoginRoute,
+  PlayRoute: PlayRoute,
   PracticeRoute: PracticeRoute,
   ProgressRoute: ProgressRoute,
   PuzzlesRoute: PuzzlesRoute,

@@ -16,6 +16,7 @@ export function InteractiveBoard({
   disabled = false,
   hintSquare,
   previewOnHover = false,
+  arrows = [],
 }: {
   id?: string;
   game: Chess;
@@ -26,6 +27,8 @@ export function InteractiveBoard({
   hintSquare?: string | undefined;
   /** Show a piece's legal moves while the pointer rests on it, before it is selected. */
   previewOnHover?: boolean;
+  /** Arrows drawn by the app, e.g. a hint or a better move. */
+  arrows?: { startSquare: string; endSquare: string; color: string }[];
 }) {
   const [mounted, setMounted] = useState(false);
   const [selected, setSelected] = useState<Square | null>(null);
@@ -120,6 +123,7 @@ export function InteractiveBoard({
               canDragPiece: ({ piece }) => piece.pieceType.charAt(0) === game.turn(),
               // Right-click and drag draws an arrow; a plain right click marks a square.
               allowDrawingArrows: true,
+              arrows,
               clearArrowsOnClick: true,
               // Hold Shift, Ctrl or Alt while dragging for a different colour.
               arrowOptions: {

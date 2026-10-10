@@ -47,6 +47,9 @@ export function SiteShell({ children }: { children: ReactNode }) {
       <Link to="/learn" onClick={() => setMenu(false)}>
         Lessons
       </Link>
+      <Link to="/play" onClick={() => setMenu(false)}>
+        Play
+      </Link>
       <Link to="/practice" onClick={() => setMenu(false)}>
         Practice board
       </Link>
@@ -155,7 +158,23 @@ export function SiteShell({ children }: { children: ReactNode }) {
           <a href="https://database.lichess.org/#puzzles" target="_blank" rel="noreferrer">
             Lichess puzzle database
           </a>{" "}
-          (CC0).
+          (CC0). Bots and coach use{" "}
+          <a
+            href="https://github.com/official-stockfish/Stockfish"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Stockfish
+          </a>{" "}
+          (
+          <a href="/engine/COPYING.txt" target="_blank" rel="noreferrer">
+            GPLv3
+          </a>
+          ,{" "}
+          <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noreferrer">
+            source
+          </a>
+          ).
         </p>
       </footer>
     </>
