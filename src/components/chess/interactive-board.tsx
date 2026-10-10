@@ -1,10 +1,12 @@
-import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
 import { SQUARES, type Chess, type Square, type PieceSymbol } from "chess.js";
 import { Button } from "@/components/ui/button";
 import { legalDestinations, needsPromotion } from "@/lib/chess-logic";
-const Chessboard = lazy(() =>
-  import("react-chessboard").then((module) => ({ default: module.Chessboard })),
-);
+const loadBoard = () => import("react-chessboard");
+const Chessboard = lazy(() => loadBoard().then((module) => ({ default: module.Chessboard })));
+// Start downloading the board as soon as the app loads in the browser, so it
+// doesn't pop in late when a board page opens.
+if (typeof window !== "undefined") void loadBoard();
 export function InteractiveBoard({
   id = "gambit-board",
   game,
@@ -29,12 +31,26 @@ export function InteractiveBoard({
   const [selected, setSelected] = useState<Square | null>(null);
   const [hovered, setHovered] = useState<Square | null>(null);
   const [promotion, setPromotion] = useState<{ from: Square; to: string } | null>(null);
+  // Squares marked with a right click. Cleared by any left click or move.
+  const [marked, setMarked] = useState<string[]>([]);
+  // Where the right button went down. Releasing on the same square marks it;
+  // releasing elsewhere is an arrow, which the board draws itself.
+  const rightDown = useRef<string | null>(null);
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     setSelected(null);
     setHovered(null);
     setPromotion(null);
+    setMarked([]);
   }, [position]);
+  function select(target: Square) {
+    setMarked([]);
+    if (disabled) return;
+    // Clicking the selected piece again closes its moves.
+    if (selected === target) return setSelected(null);
+    if (selected && move(selected, target)) return;
+    setSelected(game.get(target)?.color === game.turn() ? target : null);
+  }
   function move(from: Square, to: string) {
     if (disabled) return false;
     if (needsPromotion(game, from, to)) {
@@ -65,6 +81,12 @@ export function InteractiveBoard({
       };
     });
   }
+  for (const square of marked) {
+    squareStyles[square] = {
+      ...squareStyles[square],
+      boxShadow: "inset 0 0 0 999px var(--board-mark)",
+    };
+  }
   if (game.isCheck()) {
     const king = SQUARES.find((square) => {
       const piece = game.get(square);
@@ -73,7 +95,11 @@ export function InteractiveBoard({
     if (king) squareStyles[king] = { backgroundColor: "var(--board-check)" };
   }
   return (
-    <div className="board-wrapper" aria-label="Interactive chessboard">
+    <div
+      className="board-wrapper"
+      aria-label="Interactive chessboard"
+      onContextMenu={(event) => event.preventDefault()}
+    >
       <Suspense fallback={<div className="board-loading">Loading board…</div>}>
         {mounted && (
           <Chessboard
@@ -92,7 +118,29 @@ export function InteractiveBoard({
                 : 180,
               allowDragging: !disabled,
               canDragPiece: ({ piece }) => piece.pieceType.charAt(0) === game.turn(),
-              allowDrawingArrows: false,
+              // Right-click and drag draws an arrow; a plain right click marks a square.
+              allowDrawingArrows: true,
+              clearArrowsOnClick: true,
+              // Hold Shift, Ctrl or Alt while dragging for a different colour.
+              arrowOptions: {
+                colors: {
+                  default: "#c2702f",
+                  shift: "#4f8a5b",
+                  ctrl: "#b03a3a",
+                  alt: "#3f6fa8",
+                  meta: "#b03a3a",
+                },
+                color: "#c2702f",
+                secondaryColor: "#4f8a5b",
+                tertiaryColor: "#b03a3a",
+                arrowLengthReducerDenominator: 8,
+                sameTargetArrowLengthReducerDenominator: 4,
+                arrowWidthDenominator: 5,
+                activeArrowWidthMultiplier: 0.9,
+                opacity: 0.8,
+                activeOpacity: 0.5,
+                arrowStartOffset: 0,
+              },
               onMouseOverSquare: ({ square }) => {
                 if (!previewOnHover) return;
                 const target = SQUARES.find((s) => s === square);
@@ -107,10 +155,7 @@ export function InteractiveBoard({
               },
               onSquareClick: ({ square }) => {
                 const target = SQUARES.find((s) => s === square);
-                if (!target || disabled) return;
-                if (selected && selected !== target && move(selected, target)) return;
-                if (game.get(target)?.color === game.turn()) setSelected(target);
-                else setSelected(null);
+                if (target) select(target);
               },
               squareRenderer: ({ square, children }) => (
                 <div
@@ -118,6 +163,20 @@ export function InteractiveBoard({
                   // react-chessboard skips `squareStyles` when a custom renderer is used,
                   // so highlights and legal-move dots are applied here.
                   style={squareStyles[square]}
+                  onMouseDown={(event) => {
+                    if (event.button === 2) rightDown.current = square;
+                  }}
+                  onMouseUp={(event) => {
+                    if (event.button !== 2) return;
+                    if (rightDown.current === square) {
+                      setMarked((list) =>
+                        list.includes(square)
+                          ? list.filter((s) => s !== square)
+                          : [...list, square],
+                      );
+                    }
+                    rightDown.current = null;
+                  }}
                   role="button"
                   tabIndex={disabled ? -1 : 0}
                   aria-label={`${square}${game.get(SQUARES.find((s) => s === square) ?? "a1") ? " occupied" : ""}`}
@@ -125,9 +184,7 @@ export function InteractiveBoard({
                     if (event.key !== "Enter" && event.key !== " ") return;
                     event.preventDefault();
                     const target = SQUARES.find((s) => s === square);
-                    if (!target || disabled) return;
-                    if (selected && selected !== target && move(selected, target)) return;
-                    setSelected(game.get(target)?.color === game.turn() ? target : null);
+                    if (target) select(target);
                   }}
                 >
                   {children}

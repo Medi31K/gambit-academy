@@ -171,7 +171,7 @@ function PuzzleWorkspace({
       setPosition(game.fen());
       setReady(true);
       setBusy(false);
-    }, 600);
+    }, 350);
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
@@ -218,7 +218,7 @@ function PuzzleWorkspace({
       setIndex(nextIndex + 1);
       setBusy(false);
       if (nextIndex + 1 >= puzzle.solution.length) record(true);
-    }, 550);
+    }, 350);
     return true;
   }
   function showHint() {
@@ -244,7 +244,7 @@ function PuzzleWorkspace({
       setPosition(game.fen());
       cursor++;
       setIndex(cursor);
-      timer.current = setTimeout(step, 750);
+      timer.current = setTimeout(step, 500);
     };
     step();
   }

@@ -46,6 +46,7 @@
   --board-last: oklch(0.78 0.09 75 / 0.58);
   --board-selected: oklch(0.7 0.09 60 / 0.75);
   --board-dot: oklch(0.3 0.02 20 / 0.35);
+  --board-mark: oklch(0.6 0.16 30 / 0.55);
   --board-check: oklch(0.62 0.19 25 / 0.8);
   --success: oklch(0.43 0.07 155);
   --hero-wash: oklch(0.91 0.018 35);
