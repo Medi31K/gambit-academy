@@ -58,6 +58,9 @@ function ErrorComponent({ error }: ErrorComponentProps) {
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
         </h1>
+        <p className="mt-3 text-sm text-muted-foreground break-words">
+          {error instanceof Error ? error.message : String(error)}
+        </p>
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button onClick={() => window.location.reload()}>Try again</Button>
