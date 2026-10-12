@@ -53,7 +53,11 @@ function Play() {
   const [setup, setSetup] = useState<Setup | null>(null);
   const [round, setRound] = useState(0);
   // The setup screen is long on a phone; start each screen from the top.
-  useEffect(() => window.scrollTo(0, 0), [setup]);
+  useEffect(() => {
+    // Braces matter: newer browsers return a promise from scrollTo, and React
+    // would try to call it as a cleanup function.
+    window.scrollTo(0, 0);
+  }, [setup]);
   return (
     <div className="page">
       <div className="page-heading">
@@ -490,7 +494,10 @@ function GameView({
   const hintSquare = hint === 1 ? cache.current.get(game.fen()) : undefined;
   const [hintFrom, setHintFrom] = useState<string>();
   useEffect(() => {
-    if (!hintSquare) return setHintFrom(undefined);
+    if (!hintSquare) {
+      setHintFrom(undefined);
+      return;
+    }
     void hintSquare.then((r) => setHintFrom(r.best.slice(0, 2)));
   }, [hintSquare]);
 

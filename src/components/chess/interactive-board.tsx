@@ -50,7 +50,9 @@ export function InteractiveBoard({
   // Where the right button went down. Releasing on the same square marks it;
   // releasing elsewhere is an arrow, which the board draws itself.
   const rightDown = useRef<string | null>(null);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   useEffect(() => {
     setSelected(null);
     setHovered(null);
