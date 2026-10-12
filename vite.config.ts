@@ -6,6 +6,8 @@ import tsConfigPaths from "vite-tsconfig-paths";
 import { nitro } from "nitro/vite";
 
 export default defineConfig({
+  // Temporarily unminified, so error reports name the real function.
+  build: { minify: false },
   plugins: [
     tsConfigPaths(),
     tailwindcss(),
