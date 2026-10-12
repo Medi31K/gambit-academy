@@ -54,11 +54,11 @@ describe("move quality", () => {
 describe("bots", () => {
   it("uses Stockfish's strength limit from 1320 up", () => {
     expect(botSettings(2000).options).toMatchObject({ UCI_LimitStrength: true, UCI_Elo: 2000 });
-    expect(botSettings(2800).randomChance).toBe(0);
+    expect(botSettings(2800).slipChance).toBe(0);
   });
-  it("makes weaker bots search shallowly and play random moves more often", () => {
+  it("makes weaker bots search shallowly and slip more often", () => {
     expect(botSettings(250).depth).toBe(1);
-    expect(botSettings(250).randomChance).toBeGreaterThan(botSettings(1100).randomChance);
+    expect(botSettings(250).slipChance).toBeGreaterThan(botSettings(1100).slipChance);
   });
   it("picks the best candidate most of the time", () => {
     expect(pickWeighted(["a", "b", "c"], () => 0)).toBe("a");

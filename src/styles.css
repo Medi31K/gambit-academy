@@ -1418,19 +1418,6 @@ a:focus-visible > .nudge {
   gap: 6px;
   margin-bottom: 14px;
 }
-.eval-bar {
-  height: 8px;
-  border-radius: 99px;
-  background: oklch(0.32 0.02 20);
-  overflow: hidden;
-}
-.eval-bar span {
-  display: block;
-  height: 100%;
-  background: oklch(0.96 0.01 80);
-  border-right: 1px solid var(--border);
-  transition: width 0.3s;
-}
 .coach-note {
   display: flex;
   gap: 12px;
@@ -1444,25 +1431,80 @@ a:focus-visible > .nudge {
 .coach-note p {
   margin: 4px 0 0;
 }
-.quality-badge {
+.quality-icon {
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 30px;
-  height: 30px;
-  padding: 0 6px;
-  border-radius: 99px;
-  background: var(--q, var(--muted));
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
+  display: inline-block;
+  vertical-align: middle;
+}
+.quality-icon circle {
+  fill: var(--q);
+}
+.quality-icon text {
+  fill: #fff;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
 }
 .quality-mini {
   margin-left: 4px;
+}
+.board-badge {
+  position: absolute;
+  top: -4%;
+  right: -4%;
+  width: 38%;
+  height: 38%;
+  z-index: 5;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px oklch(0.2 0.02 20 / 0.45));
+  animation: badge-pop 0.25s ease-out;
+}
+.board-badge .quality-icon {
+  width: 100%;
+  height: 100%;
+}
+@keyframes badge-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-badge {
+    animation: none;
+  }
+}
+.label-counts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 14px;
+}
+.label-counts > div {
+  display: grid;
+  grid-template-columns: 1fr 48px 26px;
+  align-items: center;
+  min-height: 32px;
+}
+.label-counts dt {
+  font-weight: 600;
+}
+.label-counts dd {
+  margin: 0;
+  text-align: center;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 16px;
   color: var(--q);
+  font-variant-numeric: tabular-nums;
+}
+.label-counts .none dt,
+.label-counts .none dd {
+  opacity: 0.55;
 }
 .move-cell {
   display: inline-flex;
@@ -1473,6 +1515,9 @@ a:focus-visible > .nudge {
 }
 .q-great {
   --q: #3f7fbf;
+}
+.q-book {
+  --q: #a37c55;
 }
 .q-best {
   --q: #4f8a5b;
@@ -1488,6 +1533,9 @@ a:focus-visible > .nudge {
 }
 .q-mistake {
   --q: #d0702f;
+}
+.q-miss {
+  --q: #d65f4c;
 }
 .q-blunder {
   --q: #b03a3a;
@@ -1511,23 +1559,186 @@ a:focus-visible > .nudge {
   font-size: 12px;
   color: var(--muted-foreground);
 }
-.label-counts {
-  display: grid;
-  gap: 6px;
-  font-size: 13px;
-}
-.label-counts > div {
-  display: grid;
-  grid-template-columns: 34px 1fr auto;
-  align-items: center;
-}
-.label-counts .quality-badge {
-  min-width: 26px;
-  height: 22px;
-  font-size: 11px;
-}
 @media (max-width: 640px) {
   .mode-switch {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Play: the coach */
+.coach-setup {
+  display: grid;
+  gap: 22px;
+}
+.coach-intro {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.coach-face {
+  flex: none;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 3px var(--card),
+    0 0 0 4px var(--border);
+}
+.speech {
+  position: relative;
+  margin: 0;
+  max-width: 520px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.speech::before,
+.speech::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  border: 9px solid transparent;
+  transform: translateY(-50%);
+}
+.speech::before {
+  left: -19px;
+  border-right-color: var(--border);
+}
+.speech::after {
+  left: -17px;
+  border-right-color: var(--card);
+}
+.coach-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 28px;
+}
+.coach-options .panel-title {
+  font-size: 19px;
+}
+.level-list,
+.style-list {
+  display: grid;
+  gap: 6px;
+}
+.level-list button,
+.style-list button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 9px 14px;
+  font-size: 14px;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.level-list button span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.style-list button {
+  display: block;
+  padding: 11px 14px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.style-list button strong {
+  display: block;
+  font-size: 15px;
+  color: var(--foreground);
+}
+.level-list button:hover,
+.style-list button:hover {
+  border-color: var(--primary);
+}
+.level-list button.active,
+.style-list button.active {
+  border-color: var(--primary);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+.level-list button.active span {
+  color: var(--primary);
+}
+.style-list + .panel-text {
+  margin-top: 12px;
+}
+.side-picker {
+  align-items: center;
+}
+.side-picker > .panel-text {
+  margin-right: 4px;
+  font-size: 13px;
+}
+.coach-talk {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.coach-talk .speech {
+  flex: 1;
+  min-height: 52px;
+}
+.board-with-eval {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+}
+.eval-vertical {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-radius: 4px;
+  overflow: hidden;
+  background: oklch(0.32 0.02 20);
+}
+.eval-vertical.flipped {
+  justify-content: flex-start;
+}
+.eval-vertical span {
+  display: block;
+  background: oklch(0.96 0.01 80);
+  transition: height 0.4s;
+}
+@media (max-width: 640px) {
+  .coach-options {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .coach-intro {
+    gap: 14px;
+  }
+  .coach-intro .coach-face {
+    width: 72px;
+    height: 72px;
+  }
+  .coach-talk .coach-face {
+    width: 52px;
+    height: 52px;
+  }
+  .board-with-eval {
+    grid-template-columns: 8px minmax(0, 1fr);
+    gap: 4px;
+  }
+  .board-column .player-strip {
+    padding: 0 20px;
+  }
+  .play-start {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .side-picker {
+    flex-wrap: wrap;
   }
 }

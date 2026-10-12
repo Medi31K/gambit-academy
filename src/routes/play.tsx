@@ -1,12 +1,33 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Chess, type PieceSymbol } from "chess.js";
+import { Chess, SQUARES, type PieceSymbol } from "chess.js";
 import { Flag, GraduationCap, Lightbulb, RotateCcw, Swords, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InteractiveBoard } from "@/components/chess/interactive-board";
 import { Engine, type Analysis, type EngineLine } from "@/lib/engine";
 import { BOTS, COACH_OPTIONS, botMove, type Bot } from "@/lib/bots";
-import { LABELS, reviewMove, winChance, type MoveLabel, type MoveReview } from "@/lib/move-quality";
+import {
+  COACH_LEVELS,
+  COACH_NAME,
+  COACH_STYLES,
+  coachRating,
+  describeOwnMove,
+  greeting,
+  openingLine,
+  type CoachLevel,
+  type CoachStyle,
+} from "@/lib/coach";
+import { CoachAvatar } from "@/components/chess/coach-avatar";
+import { QualityIcon } from "@/components/chess/quality-icon";
+import {
+  LABELS,
+  LABEL_ORDER,
+  reviewMove,
+  winChance,
+  type MoveLabel,
+  type MoveReview,
+} from "@/lib/move-quality";
+import { loadOpenings, lookupOpening } from "@/lib/openings";
 import { tryMove, uciMove } from "@/lib/chess-logic";
 import { pageHead } from "@/lib/metadata";
 
@@ -21,19 +42,23 @@ export const Route = createFileRoute("/play")({
 
 type Side = "w" | "b";
 interface Setup {
+  // The coach is played like a bot, with id "coach".
   bot: Bot;
   side: Side;
   coach: boolean;
+  level?: CoachLevel;
 }
 
 function Play() {
   const [setup, setSetup] = useState<Setup | null>(null);
   const [round, setRound] = useState(0);
+  // The setup screen is long on a phone; start each screen from the top.
+  useEffect(() => window.scrollTo(0, 0), [setup]);
   return (
     <div className="page">
       <div className="page-heading">
         <h1>Play</h1>
-        <p>Pick an opponent. With the coach on, every move you make gets rated and explained.</p>
+        <p>Play {COACH_NAME}, who talks you through the game, or take on a bot.</p>
       </div>
       {setup ? (
         <GameView
@@ -50,6 +75,7 @@ function Play() {
 }
 
 function Avatar({ bot, size = 44 }: { bot: Bot; size?: number }) {
+  if (bot.id === "coach") return <CoachAvatar size={size} className="coach-face" />;
   return (
     <span
       className="bot-avatar"
@@ -61,103 +87,193 @@ function Avatar({ bot, size = 44 }: { bot: Bot; size?: number }) {
   );
 }
 
+function SidePicker({
+  side,
+  setSide,
+}: {
+  side: Side | "random";
+  setSide: (side: Side | "random") => void;
+}) {
+  return (
+    <div className="side-picker" role="radiogroup" aria-label="Your colour">
+      <span className="panel-text">Play as</span>
+      {(["w", "random", "b"] as const).map((value) => (
+        <Button
+          key={value}
+          type="button"
+          role="radio"
+          aria-checked={side === value}
+          variant={side === value ? "secondary" : "ghost"}
+          onClick={() => setSide(value)}
+        >
+          {value === "w" ? "White" : value === "b" ? "Black" : "Random"}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+const pickSide = (side: Side | "random"): Side =>
+  side === "random" ? (Math.random() < 0.5 ? "w" : "b") : side;
+
 function SetupView({ start }: { start: (setup: Setup) => void }) {
+  const [tab, setTab] = useState<"coach" | "bots">("coach");
   const [bot, setBot] = useState<Bot>(
     () => BOTS.find((item) => item.id === "margot") ?? (BOTS[0] as Bot),
   );
+  const [level, setLevel] = useState<CoachLevel>(
+    () => COACH_LEVELS.find((item) => item.id === "club") ?? (COACH_LEVELS[0] as CoachLevel),
+  );
+  const [style, setStyle] = useState<CoachStyle>("balanced");
   const [side, setSide] = useState<Side | "random">("w");
-  const [coach, setCoach] = useState(true);
+  const rating = coachRating(level, style);
   return (
     <div className="play-setup">
-      <div className="mode-switch" role="radiogroup" aria-label="Game type">
+      <div className="mode-switch" role="tablist" aria-label="Opponent type">
         <button
           type="button"
-          role="radio"
-          aria-checked={coach}
-          className={coach ? "active" : ""}
-          onClick={() => setCoach(true)}
+          role="tab"
+          aria-selected={tab === "coach"}
+          className={tab === "coach" ? "active" : ""}
+          onClick={() => setTab("coach")}
         >
           <GraduationCap />
           <span>
-            <strong>Play with a coach</strong>
-            Every move rated and explained, with hints and takebacks.
+            <strong>Play the coach</strong>
+            {COACH_NAME} rates every move, explains her own, and lets you take moves back.
           </span>
         </button>
         <button
           type="button"
-          role="radio"
-          aria-checked={!coach}
-          className={!coach ? "active" : ""}
-          onClick={() => setCoach(false)}
+          role="tab"
+          aria-selected={tab === "bots"}
+          className={tab === "bots" ? "active" : ""}
+          onClick={() => setTab("bots")}
         >
           <Swords />
           <span>
-            <strong>Play a bot</strong>A normal game. You get the full review at the end.
+            <strong>Play a bot</strong>A normal game against a character. Full review at the end.
           </span>
         </button>
       </div>
-      <h2 className="panel-title">Choose your opponent</h2>
-      <div className="bot-grid" role="radiogroup" aria-label="Opponent">
-        {BOTS.map((item) => (
-          <button
-            type="button"
-            role="radio"
-            aria-checked={item.id === bot.id}
-            key={item.id}
-            className={`bot-card ${item.id === bot.id ? "active" : ""}`}
-            onClick={() => setBot(item)}
-          >
-            <Avatar bot={item} />
-            <span>
-              <strong>{item.name}</strong>
-              <span className="bot-rating">≈ {item.rating}</span>
-              <span className="bot-blurb">{item.blurb}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-      <p className="panel-text">
-        Bot ratings are Gambit Academy estimates, not official Elo. The bots and the coach run on
-        the Stockfish engine, in your browser.
-      </p>
-      <div className="play-start">
-        <div className="side-picker" role="radiogroup" aria-label="Your colour">
-          {(["w", "random", "b"] as const).map((value) => (
+      {tab === "coach" ? (
+        <div className="coach-setup">
+          <div className="coach-intro">
+            <CoachAvatar size={104} className="coach-face" />
+            <p className="speech">{greeting(level)}</p>
+          </div>
+          <div className="coach-options">
+            <div>
+              <h2 className="panel-title">Your level</h2>
+              <div className="level-list" role="radiogroup" aria-label="Your level">
+                {COACH_LEVELS.map((item) => (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={item.id === level.id}
+                    key={item.id}
+                    className={item.id === level.id ? "active" : ""}
+                    onClick={() => setLevel(item)}
+                  >
+                    {item.label} <span>{item.rating}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h2 className="panel-title">How hard?</h2>
+              <div className="style-list" role="radiogroup" aria-label="Difficulty">
+                {(Object.keys(COACH_STYLES) as CoachStyle[]).map((key) => (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={style === key}
+                    key={key}
+                    className={style === key ? "active" : ""}
+                    onClick={() => setStyle(key)}
+                  >
+                    <strong>{COACH_STYLES[key].label}</strong>
+                    {COACH_STYLES[key].text}
+                  </button>
+                ))}
+              </div>
+              <p className="panel-text">
+                {COACH_NAME} will play at about {rating}. At lower levels she sometimes leaves a
+                piece hanging, the way real players do. See if you can spot it.
+              </p>
+            </div>
+          </div>
+          <div className="play-start">
+            <SidePicker side={side} setSide={setSide} />
             <Button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={side === value}
-              variant={side === value ? "secondary" : "ghost"}
-              onClick={() => setSide(value)}
+              size="lg"
+              onClick={() =>
+                start({
+                  bot: {
+                    id: "coach",
+                    name: COACH_NAME,
+                    rating,
+                    blurb: "",
+                    color: "#9c4a3c",
+                  },
+                  coach: true,
+                  level,
+                  side: pickSide(side),
+                })
+              }
             >
-              {value === "w" ? "White" : value === "b" ? "Black" : "Random"}
+              Play {COACH_NAME}
             </Button>
-          ))}
+          </div>
         </div>
-        <Button
-          onClick={() =>
-            start({
-              bot,
-              coach,
-              side: side === "random" ? (Math.random() < 0.5 ? "w" : "b") : side,
-            })
-          }
-        >
-          Play {bot.name}
-        </Button>
-      </div>
+      ) : (
+        <>
+          <div className="bot-grid" role="radiogroup" aria-label="Opponent">
+            {BOTS.map((item) => (
+              <button
+                type="button"
+                role="radio"
+                aria-checked={item.id === bot.id}
+                key={item.id}
+                className={`bot-card ${item.id === bot.id ? "active" : ""}`}
+                onClick={() => setBot(item)}
+              >
+                <Avatar bot={item} />
+                <span>
+                  <strong>{item.name}</strong>
+                  <span className="bot-rating">≈ {item.rating}</span>
+                  <span className="bot-blurb">{item.blurb}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="play-start">
+            <SidePicker side={side} setSide={setSide} />
+            <Button size="lg" onClick={() => start({ bot, coach: false, side: pickSide(side) })}>
+              Play {bot.name}
+            </Button>
+          </div>
+        </>
+      )}
+      <p className="panel-text">
+        Ratings are Gambit Academy estimates, not official Elo. {COACH_NAME} and the bots run on the
+        Stockfish engine, right in your browser.
+      </p>
     </div>
   );
 }
 
 interface PlayedMove {
   san: string;
+  to: string;
   color: Side;
   review?: MoveReview;
 }
 
 type Arrow = { startSquare: string; endSquare: string; color: string };
+
+// Ratings that come with an arrow to the better move.
+const SHOW_BETTER: MoveLabel[] = ["inaccuracy", "mistake", "miss", "blunder"];
 
 function resultText(game: Chess, side: Side, resigned: boolean): string {
   if (resigned) return "You resigned.";
@@ -187,7 +303,12 @@ function GameView({
   rematch: () => void;
   change: () => void;
 }) {
-  const { bot, side, coach } = setup;
+  const { bot, side, coach, level } = setup;
+  // What the coach is saying, newest last.
+  const [talk, setTalk] = useState<string[]>(() =>
+    level ? [greeting(level), openingLine(side)] : [],
+  );
+  const say = (line: string) => line && setTalk((list) => [...list.slice(-3), line]);
   const [game] = useState(() => new Chess());
   const [position, setPosition] = useState(game.fen());
   const [moves, setMoves] = useState<PlayedMove[]>([]);
@@ -201,6 +322,8 @@ function GameView({
   const engine = useRef<Engine | null>(null);
   const generation = useRef(0);
   const cache = useRef(new Map<string, Promise<Analysis>>());
+  // The last opening the coach named, so she doesn't repeat herself.
+  const announced = useRef("");
 
   const over = resigned || game.isGameOver();
   const yourTurn = !over && !thinking && game.turn() === side;
@@ -227,14 +350,24 @@ function GameView({
     setThinking(true);
     try {
       const fen = game.fen();
-      const uci = await botMove(engineRef, fen, bot.rating);
+      const { uci } = await botMove(engineRef, fen, bot.rating);
       const wait = 450 - (Date.now() - started);
       if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
       if (gen !== generation.current) return;
       const move = uciMove(game, uci);
       if (!move) throw new Error("The bot picked an illegal move.");
-      setMoves((list) => [...list, { san: move.san, color: move.color }]);
+      setMoves((list) => [...list, { san: move.san, to: move.to, color: move.color }]);
       sync();
+      if (coach) {
+        let line = describeOwnMove(fen, uci);
+        const opening = await lookupOpening(game.fen());
+        if (opening?.exact && opening.name !== announced.current) {
+          announced.current = opening.name;
+          const named = `This is the ${opening.name}.`;
+          line = line === "Your move." ? named : `${line} ${named}`;
+        }
+        if (gen === generation.current) say(line);
+      }
       if (!game.isGameOver()) {
         // Analyse the player's position early, so rating their move is quick.
         void analyse(game.fen()).then((result) => {
@@ -259,6 +392,7 @@ function GameView({
       return;
     }
     engine.current = created;
+    void loadOpenings();
     void created.newGame().then(() => {
       if (side === "w") void analyse(game.fen()).then((r) => setEvaluation(winChance(r.lines[0])));
       else void botTurn();
@@ -280,7 +414,7 @@ function GameView({
     const uci = move.from + move.to + (move.promotion ?? "");
     const index = moves.length;
     const gen = generation.current;
-    setMoves((list) => [...list, { san: move.san, color: move.color }]);
+    setMoves((list) => [...list, { san: move.san, to: move.to, color: move.color }]);
     setArrows([]);
     setHint(0);
     sync();
@@ -290,11 +424,14 @@ function GameView({
         const before = await analyse(fenBefore);
         const fenAfter = game.fen();
         const after = game.isGameOver() ? finalAnalysis(game) : await analyse(fenAfter);
+        const opening = await lookupOpening(fenAfter);
         if (gen !== generation.current) return;
-        const review = reviewMove(fenBefore, uci, before, after);
+        if (opening?.exact) announced.current = opening.name;
+        const review = reviewMove(fenBefore, uci, before, after, opening?.name);
         setMoves((list) => list.map((item, i) => (i === index ? { ...item, review } : item)));
         setEvaluation(-winChance(after.lines[0]));
-        if (coach && review.better && ["inaccuracy", "mistake", "blunder"].includes(review.label)) {
+        if (coach && game.isCheckmate()) say("Checkmate! Well played. You earned that one.");
+        if (coach && review.better && SHOW_BETTER.includes(review.label)) {
           setArrows([
             {
               startSquare: review.better.uci.slice(0, 2),
@@ -358,6 +495,16 @@ function GameView({
   }, [hintSquare]);
 
   const result = over ? resultText(game, side, resigned) : "";
+  // The rating sits on the square your last move went to, while your piece is still there.
+  const lastMine = [...moves].reverse().find((move) => move.color === side);
+  const badgeSquare = SQUARES.find((square) => square === lastMine?.to);
+  const badge =
+    (coach || over) && lastMine?.review && badgeSquare && game.get(badgeSquare)?.color === side
+      ? {
+          square: badgeSquare,
+          content: <QualityIcon label={lastMine.review.label} />,
+        }
+      : undefined;
   const playerMoves = moves.filter((move) => move.color === side && move.review);
   const accuracy = playerMoves.length
     ? Math.round(
@@ -372,20 +519,25 @@ function GameView({
         <div className="player-strip">
           <Avatar bot={bot} size={34} />
           <span>
-            <strong>{bot.name}</strong> <span className="bot-rating">≈ {bot.rating}</span>
+            <strong>{bot.id === "coach" ? `Coach ${bot.name}` : bot.name}</strong>{" "}
+            <span className="bot-rating">≈ {bot.rating}</span>
           </span>
           {thinking && !over && <span className="thinking">Thinking…</span>}
         </div>
-        <InteractiveBoard
-          id="gambit-board"
-          game={game}
-          position={position}
-          orientation={side === "w" ? "white" : "black"}
-          onMove={onMove}
-          disabled={!yourTurn}
-          hintSquare={hint === 1 ? hintFrom : undefined}
-          arrows={arrows}
-        />
+        <div className={coach ? "board-with-eval" : ""}>
+          {coach && <VerticalEval value={evaluation ?? 0} side={side} />}
+          <InteractiveBoard
+            id="gambit-board"
+            game={game}
+            position={position}
+            orientation={side === "w" ? "white" : "black"}
+            onMove={onMove}
+            disabled={!yourTurn}
+            hintSquare={hint === 1 ? hintFrom : undefined}
+            arrows={arrows}
+            badge={badge}
+          />
+        </div>
         <div className="board-bar">
           <span className="turn-indicator" aria-live="polite">
             {over ? result : yourTurn ? "Your move" : `${bot.name} is thinking`}
@@ -440,9 +592,16 @@ function GameView({
             {engineError} Try reloading the page.
           </div>
         )}
+        {coach && (
+          <div className="coach-talk">
+            <CoachAvatar size={64} className="coach-face" />
+            <div className="speech" aria-live="polite">
+              {talk.at(-1) ?? ""}
+            </div>
+          </div>
+        )}
         {coach && !over && (
           <>
-            <h2 className="panel-title">Coach</h2>
             {evaluation !== null && <EvalBar value={evaluation} />}
             <CoachNote review={lastReview} hint={hint} />
           </>
@@ -480,13 +639,26 @@ function GameView({
   );
 }
 
+// Vertical bar beside the board. White's share sits on White's side of the board.
+function VerticalEval({ value, side }: { value: number; side: Side }) {
+  const yours = (value + 1) / 2;
+  const white = side === "w" ? yours : 1 - yours;
+  return (
+    <div
+      className={`eval-vertical ${side === "b" ? "flipped" : ""}`}
+      role="img"
+      aria-label={`Evaluation: White ${Math.round(white * 100)}%`}
+    >
+      <span style={{ height: `${Math.round(white * 100)}%` }} />
+    </div>
+  );
+}
+
+// What the bar beside the board means, in words.
 function EvalBar({ value }: { value: number }) {
   const percent = Math.round(((value + 1) / 2) * 100);
   return (
     <div className="eval">
-      <div className="eval-bar" aria-hidden="true">
-        <span style={{ width: `${percent}%` }} />
-      </div>
       <span className="panel-text">
         {percent >= 60
           ? "You're better here."
@@ -514,11 +686,11 @@ function CoachNote({ review, hint }: { review: MoveReview | undefined; hint: num
     return <p className="panel-text">Make a move and I'll tell you what I think of it.</p>;
   return (
     <div className={`coach-note q-${review.label}`} role="status">
-      <span className="quality-badge">{LABELS[review.label].symbol}</span>
+      <QualityIcon label={review.label} size={30} />
       <div>
         <strong>{LABELS[review.label].name}</strong>
         <p>{review.comment}</p>
-        {review.better && ["inaccuracy", "mistake", "blunder"].includes(review.label) && (
+        {review.better && SHOW_BETTER.includes(review.label) && (
           <p className="panel-text">The green arrow shows the better move.</p>
         )}
       </div>
@@ -526,30 +698,21 @@ function CoachNote({ review, hint }: { review: MoveReview | undefined; hint: num
   );
 }
 
+// How many of your moves earned each rating, best first.
 function LabelCounts({ moves }: { moves: PlayedMove[] }) {
-  const order: MoveLabel[] = [
-    "brilliant",
-    "great",
-    "best",
-    "excellent",
-    "good",
-    "inaccuracy",
-    "mistake",
-    "blunder",
-  ];
   return (
-    <div className="label-counts">
-      {order.map((label) => {
+    <dl className="label-counts">
+      {LABEL_ORDER.map((label) => {
         const count = moves.filter((move) => move.review?.label === label).length;
         return (
-          <div key={label} className={`q-${label}`}>
-            <span className="quality-badge">{LABELS[label].symbol}</span>
-            <span>{LABELS[label].name}</span>
-            <strong>{count}</strong>
+          <div key={label} className={`q-${label} ${count ? "" : "none"}`}>
+            <dt>{LABELS[label].name}</dt>
+            <dd>{count}</dd>
+            <QualityIcon label={label} size={26} />
           </div>
         );
       })}
-    </div>
+    </dl>
   );
 }
 
@@ -571,12 +734,7 @@ function MoveList({
     <span className="move-cell">
       {move?.san ?? ""}
       {showRatings && move?.color === side && move.review && (
-        <span
-          className={`quality-mini q-${move.review.label}`}
-          title={LABELS[move.review.label].name}
-        >
-          {LABELS[move.review.label].symbol}
-        </span>
+        <QualityIcon label={move.review.label} size={16} className="quality-mini" />
       )}
     </span>
   );

@@ -1,5 +1,5 @@
-import { Chess } from "chess.js";
 import type { Engine } from "@/lib/engine";
+import { hangingMoves, pickSlip, slipChance } from "@/lib/human-errors";
 
 // Practice opponents. Ratings are approximate Gambit Academy estimates, not
 // official Elo. From 1320 up, Stockfish's own strength limit (UCI_Elo) is used;
@@ -89,26 +89,28 @@ const ENGINE_FLOOR = 1320;
 
 export interface BotSettings {
   options: Record<string, string | number | boolean>;
-  depth?: number;
-  movetime?: number;
+  depth?: number | undefined;
+  movetime?: number | undefined;
   multipv: number;
-  randomChance: number;
+  // Chance per move of leaving a piece hanging, like a human slip.
+  slipChance: number;
 }
 
 export function botSettings(rating: number): BotSettings {
+  const slips = slipChance(rating);
   if (rating >= ENGINE_FLOOR) {
     return {
       options: { UCI_LimitStrength: true, UCI_Elo: Math.min(3190, rating), "Skill Level": 20 },
       movetime: 300 + Math.round((rating - ENGINE_FLOOR) / 6),
       multipv: 1,
-      randomChance: 0,
+      slipChance: slips,
     };
   }
   return {
     options: { UCI_LimitStrength: false, "Skill Level": 0 },
     depth: Math.max(1, Math.round(rating / 300)),
     multipv: 4,
-    randomChance: Math.max(0, Math.min(0.5, (0.5 * (ENGINE_FLOOR - rating)) / 1070)),
+    slipChance: slips,
   };
 }
 
@@ -124,17 +126,24 @@ export function pickWeighted(moves: string[], random: () => number): string | un
   return moves[0];
 }
 
+export interface BotChoice {
+  uci: string;
+  // True when the bot deliberately left material hanging.
+  slip: boolean;
+}
+
 export async function botMove(
   engine: Engine,
   fen: string,
   rating: number,
   random: () => number = Math.random,
-): Promise<string> {
+): Promise<BotChoice> {
   const settings = botSettings(rating);
-  const legal = new Chess(fen).moves({ verbose: true });
-  if (settings.randomChance && random() < settings.randomChance) {
-    const move = legal[Math.floor(random() * legal.length)];
-    if (move) return move.from + move.to + (move.promotion ?? "");
+  // No slips in the first few moves, so games don't open with nonsense.
+  const moveNumber = Number(fen.split(" ")[5] ?? 1);
+  if (moveNumber > 3 && settings.slipChance && random() < settings.slipChance) {
+    const slip = pickSlip(hangingMoves(fen), random);
+    if (slip) return { uci: slip, slip: true };
   }
   const result = await engine.analyse(
     fen,
@@ -143,9 +152,9 @@ export async function botMove(
   );
   if (settings.multipv > 1) {
     const candidates = result.lines.map((line) => line.move);
-    return pickWeighted(candidates, random) ?? result.best;
+    return { uci: pickWeighted(candidates, random) ?? result.best, slip: false };
   }
-  return result.best;
+  return { uci: result.best, slip: false };
 }
 
 // Full-strength settings for the coach's analysis.

@@ -1,4 +1,12 @@
-import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { SQUARES, type Chess, type Square, type PieceSymbol } from "chess.js";
 import { Button } from "@/components/ui/button";
 import { legalDestinations, needsPromotion } from "@/lib/chess-logic";
@@ -17,6 +25,7 @@ export function InteractiveBoard({
   hintSquare,
   previewOnHover = false,
   arrows = [],
+  badge,
 }: {
   id?: string;
   game: Chess;
@@ -29,6 +38,8 @@ export function InteractiveBoard({
   previewOnHover?: boolean;
   /** Arrows drawn by the app, e.g. a hint or a better move. */
   arrows?: { startSquare: string; endSquare: string; color: string }[];
+  /** Something to pin to the corner of one square, like a move rating. */
+  badge?: { square: string; content: ReactNode } | undefined;
 }) {
   const [mounted, setMounted] = useState(false);
   const [selected, setSelected] = useState<Square | null>(null);
@@ -166,7 +177,7 @@ export function InteractiveBoard({
                   className="h-full w-full"
                   // react-chessboard skips `squareStyles` when a custom renderer is used,
                   // so highlights and legal-move dots are applied here.
-                  style={squareStyles[square]}
+                  style={{ ...squareStyles[square], position: "relative" }}
                   onMouseDown={(event) => {
                     if (event.button === 2) rightDown.current = square;
                   }}
@@ -192,6 +203,11 @@ export function InteractiveBoard({
                   }}
                 >
                   {children}
+                  {badge?.square === square && (
+                    <span className="board-badge" aria-hidden="true">
+                      {badge.content}
+                    </span>
+                  )}
                 </div>
               ),
             }}

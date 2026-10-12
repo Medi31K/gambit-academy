@@ -157,8 +157,12 @@ export function SiteShell({ children }: { children: ReactNode }) {
           Puzzles from the{" "}
           <a href="https://database.lichess.org/#puzzles" target="_blank" rel="noreferrer">
             Lichess puzzle database
+          </a>
+          , opening names from{" "}
+          <a href="https://github.com/lichess-org/chess-openings" target="_blank" rel="noreferrer">
+            Lichess chess-openings
           </a>{" "}
-          (CC0). Bots and coach use{" "}
+          (both CC0). Bots and coach use{" "}
           <a
             href="https://github.com/official-stockfish/Stockfish"
             target="_blank"
