@@ -61,6 +61,11 @@ function ErrorComponent({ error }: ErrorComponentProps) {
         <p className="mt-3 text-sm text-muted-foreground break-words">
           {error instanceof Error ? error.message : String(error)}
         </p>
+        {error instanceof Error && error.stack && (
+          <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap text-left text-[11px] text-muted-foreground">
+            {error.stack.split("\n").slice(0, 6).join("\n")}
+          </pre>
+        )}
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button onClick={() => window.location.reload()}>Try again</Button>
