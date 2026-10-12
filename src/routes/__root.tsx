@@ -3,12 +3,11 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
-  useRouter,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { SiteShell } from "@/components/academy/site-shell";
 import { Button } from "@/components/ui/button";
@@ -34,9 +33,24 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: ErrorComponentProps) {
+function ErrorComponent({ error }: ErrorComponentProps) {
   console.error(error);
-  const router = useRouter();
+  // After a new version goes live, an open tab can ask for code files that no
+  // longer exist. Reloading once fetches the new version.
+  useEffect(() => {
+    const stale =
+      /dynamically imported module|Importing a module script failed|error loading dynamically|Loading chunk|Failed to fetch/i.test(
+        error instanceof Error ? error.message : String(error),
+      );
+    if (!stale) return;
+    try {
+      if (sessionStorage.getItem("reloaded-for-update")) return;
+      sessionStorage.setItem("reloaded-for-update", "1");
+    } catch {
+      return;
+    }
+    window.location.reload();
+  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -46,14 +60,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
         </h1>
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <Button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-          >
-            Try again
-          </Button>
+          <Button onClick={() => window.location.reload()}>Try again</Button>
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
