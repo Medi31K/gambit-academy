@@ -38,6 +38,9 @@ export function SiteShell({ children }: { children: ReactNode }) {
   };
   const nav = (
     <>
+      <a href="https://phrenico.dk" className="hub-link" title="More playgrounds on phrenico.dk">
+        phrenico.dk
+      </a>
       <Link to="/" activeOptions={{ exact: true }} onClick={() => setMenu(false)}>
         Home
       </Link>
@@ -149,6 +152,11 @@ export function SiteShell({ children }: { children: ReactNode }) {
       </header>
       <main id="main">{children}</main>
       <footer className="site-footer">
+        <p className="footer-credit">
+          Part of <a href="https://phrenico.dk">phrenico.dk</a>: small worlds for learning to code (
+          <a href="https://python.phrenico.dk">Python</a>, <a href="https://c.phrenico.dk">C++</a>,{" "}
+          <a href="https://pygame.phrenico.dk">pygame</a>).
+        </p>
         <Link to="/" className="footer-brand">
           <BrandMark />
           <span>gambit academy</span>

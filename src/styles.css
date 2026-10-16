@@ -1742,3 +1742,6 @@ a:focus-visible > .nudge {
     flex-wrap: wrap;
   }
 }
+
+/* link back to the phrenico.dk hub */
+.hub-link { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.8em; opacity: 0.75; }
